@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fun P2P Chat with Emojis</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat&display=swap');
+    body {
+      margin: 0; padding: 0;
+      font-family: 'Montserrat', sans-serif;
+      background: #0a1629;
+      color: #d0e4ff;
+      display: flex;
+      flex-direction: column;
+      max-width: 600px;
+      margin: 20px auto;
+      height: 100vh;
+    }
+    header {
+      text-align: center;
+      padding: 15px 10px;
+      font-size: 1.7rem;
+      font-weight: 700;
+      color: #7ec4ff;
+      user-select: none;
+      border-bottom: 2px solid #183661;
+    }
+    #status {
+      text-align: center;
+      color: #a0b9ff;
+      font-size: 0.9rem;
+      margin-top: 4px;
+      user-select: none;
+    }
+    #chat {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 15px;
+      background: #0f1f40;
+      border-radius: 10px;
+      margin: 10px 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+    .msg {
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 20px;
+      font-size: 1.1rem;
+      word-wrap: break-word;
+      user-select: text;
+    }
+    .mine {
+      align-self: flex-end;
+      background: #3c83f7;
+      color: #d7e7ff;
+      box-shadow: 0 2px 8px rgba(60,131,247,0.6);
+    }
+    .theirs {
+      align-self: flex-start;
+      background: #1b2f62;
+      color: #a9c3ff;
+      box-shadow: 0 2px 8px rgba(27,47,98,0.6);
+    }
+    .msg img {
+      max-width: 100%;
+      border-radius: 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+    #input-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 15px 15px 15px;
+    }
+    #messageInput {
+      flex-grow: 1;
+      padding: 12px 16px;
+      font-size: 1.1rem;
+      border-radius: 25px;
+      border: none;
+      background: #183661;
+      color: #d0e4ff;
+      outline-offset: 2px;
+      outline-color: #4a90e2;
+      transition: outline-color 0.3s ease;
+    }
+    #messageInput::placeholder {
+      color: #aac0ff;
+    }
+    #messageInput:focus {
+      outline-color: #7ec4ff;
+      background: #224080;
+    }
+    button, label {
+      cursor: pointer;
+      background: #3c83f7;
+      border: none;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.3s ease;
+      color: #d0e4ff;
+      font-size: 22px;
+      user-select: none;
+    }
+    button:disabled, label:disabled {
+      background: #355f99;
+      cursor: not-allowed;
+      color: #869ecf;
+    }
+    button:hover:not(:disabled), label:hover:not(:disabled) {
+      background: #6299f7;
+    }
+    #emojiPicker {
+      position: absolute;
+      bottom: 75px;
+      right: 25px;
+      background: #183661;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      max-width: 320px;
+      max-height: 280px;
+      overflow-y: auto;
+      display: none;
+      padding: 12px;
+      z-index: 9999;
+      user-select: none;
+    }
+    #emojiPicker span {
+      font-size: 24px;
+      padding: 6px 8px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.2s ease;
+      user-select: none;
+    }
+    #emojiPicker span:hover {
+      background: #3c83f7;
+    }
+    #fileInput {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>💬 Fun P2P Chat</header>
+<div id="status">Connecting...</div>
+<div id="chat"></div>
+
+<div id="input-area">
+  <button id="emojiBtn" title="Pick emoji">😊</button>
+  <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off" spellcheck="false" />
+  <button id="sendBtn" disabled title="Send message">➡️</button>
+  <label for="fileInput" title="Send image">📷</label>
+  <input type="file" id="fileInput" accept="image/*" />
+</div>
+
+<div id="emojiPicker" aria-label="Emoji picker" role="list"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/simple-peer@9/simplepeer.min.js"></script>
+<script>
+  const chat = document.getElementById('chat');
+  const status = document.getElementById('status');
+  const messageInput = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const emojiBtn = document.getElementById('emojiBtn');
+  const emojiPicker = document.getElementById('emojiPicker');
+  const fileInput = document.getElementById('fileInput');
+
+  // Emojis to show in picker (feel free to add more!)
+  const emojis = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🤩','🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬'];
+
+  // Room setup using Simple-Peer signaling server via WebSocket
+  let roomId = location.hash.substring(1);
+  if (!roomId) {
+    roomId = Math.random().toString(36).substr(2, 9);
+    location.hash = roomId;
+  }
+
+  status.textContent = `Room ID: ${roomId} — Share this link with your crush`;
+
+  const ws = new WebSocket('wss://signaling.simplepeerjs.com');
+  let peer;
+  let connected = false;
+  let isInitiator = false;
+
+  function addMessage(text, mine = false) {
+    const div = document.createElement('div');
+    div.classList.add('msg', mine ? 'mine' : 'theirs');
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+  function addImage(dataUrl, mine = false) {
+    const div = document.createElement('div');
+    div.classList.add('msg', mine ? 'mine' : 'theirs');
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = "Sent image";
+    div.appendChild(img);
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'join', room: roomId }));
+  };
+
+  ws.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'init') {
+      isInitiator = data.initiator;
+      peer = new SimplePeer({ initiator: isInitiator, trickle: false });
+
+      peer.on('signal', signalData => {
+        ws.send(JSON.stringify({ type: 'signal', room: roomId, signal: signalData }));
+      });
+
+      peer.on('connect', () => {
+        connected = true;
+        status.textContent = 'Connected! Start chatting ✨';
+        sendBtn.disabled = false;
+        messageInput.disabled = false;
+        fileInput.disabled = false;
+        messageInput.focus();
+      });
+
+      peer.on('data', data => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'image') {
+            addImage(parsed.data, false);
+            return;
+          }
+        } catch {
+          // Not JSON, treat as plain text
+        }
+        addMessage(data.toString(), false);
+      });
+
+      peer.on('error', err => {
+        status.textContent = 'Connection error: ' + err;
+      });
+
+      peer.on('close', () => {
+        status.textContent = 'Connection closed.';
+        sendBtn.disabled = true;
+        messageInput.disabled = true;
+        fileInput.disabled = true;
+      });
+
+    } else if (data.type === 'signal' && peer) {
+      peer.signal(data.signal);
+    }
+  };
+
+  sendBtn.onclick = () => {
+    const msg = messageInput.value.trim();
+    if (!msg || !connected) return;
+    peer.send(msg);
+    addMessage(msg, true);
+    messageInput.value = '';
+  };
+
+  messageInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (!connected) return;
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = { type: 'image', data: reader.result };
+      peer.send(JSON.stringify(data));
+      addImage(reader.result, true);
+      fileInput.value = '';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Emoji picker toggle
+  emojiBtn.addEventListener('click', () => {
+    if (emojiPicker.style.display === 'block') {
+      emojiPicker.style.display = 'none';
+    } else {
+      emojiPicker.style.display = 'flex';
+      emojiPicker.style.flexWrap = 'wrap';
+    }
+  });
+
+  // Build emoji picker buttons
+  emojis.forEach(e => {
+    const span = document.createElement('span');
+    span.textContent = e;
+    span.title = e;
+    span.addEventListener('click', () => {
+      messageInput.value += e;
+      messageInput.focus();
+      emojiPicker.style.display = 'none';
+    });
+    emojiPicker.appendChild(span);
+  });
+
+  // Hide emoji picker if click outside
+  document.addEventListener('click', e => {
+    if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
+      emojiPicker.style.display = 'none';
+    }
+  });
+</script>
+
+</body>
+</html>
